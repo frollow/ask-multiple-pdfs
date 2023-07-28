@@ -25,22 +25,39 @@ def get_pdf_text(pdf_docs):
 
 def get_text_chunks(text):
     text_splitter = CharacterTextSplitter(
-        separator="\n", chunk_size=1000, chunk_overlap=200, length_function=len
+        separator="\n", chunk_size=400, chunk_overlap=50, length_function=len
     )
     chunks = text_splitter.split_text(text)
     return chunks
 
 
 def get_vectorstore(text_chunks):
-    embeddings = OpenAIEmbeddings()
-    # embeddings = HuggingFaceInstructEmbeddings(model_name="hkunlp/instructor-xl")
+    # embeddings = OpenAIEmbeddings()
+    embeddings = HuggingFaceInstructEmbeddings(
+        model_name="hkunlp/instructor-xl"
+    )
     vectorstore = FAISS.from_texts(texts=text_chunks, embedding=embeddings)
+    # Сохранение vectorstore в файл
+    vectorstore.save_local("../")
+    return vectorstore
+
+
+def load_vectorstore():
+    # embeddings = OpenAIEmbeddings()
+    embeddings = HuggingFaceInstructEmbeddings(
+        model_name="hkunlp/instructor-xl"
+    )
+    # Загрузка vectorstore из файла
+    vectorstore = FAISS.load_local("../", embeddings=embeddings)
     return vectorstore
 
 
 def get_conversation_chain(vectorstore):
     llm = ChatOpenAI()
-    # llm = HuggingFaceHub(repo_id="google/flan-t5-xxl", model_kwargs={"temperature":0.5, "max_length":512})
+    # llm = HuggingFaceHub(
+    #     repo_id="google/flan-t5-xxl",
+    #     model_kwargs={"temperature": 0.5, "max_length": 512},
+    # )
 
     memory = ConversationBufferMemory(
         memory_key="chat_history", return_messages=True
@@ -53,8 +70,9 @@ def get_conversation_chain(vectorstore):
 
 def handle_userinput(user_question):
     if st.session_state.conversation is None:
-        st.write("Пожалуйста, сначала загрузите и обработайте ваши PDF-документы.")
-        return
+        vectorstore = load_vectorstore()
+        # create conversation chain
+        st.session_state.conversation = get_conversation_chain(vectorstore)
     response = st.session_state.conversation({"question": user_question})
     st.session_state.chat_history = response["chat_history"]
 
@@ -74,7 +92,7 @@ def handle_userinput(user_question):
 def main():
     load_dotenv()
     st.set_page_config(
-        page_title="Chat with multiple PDFs", page_icon=":books:"
+        page_title="Get answers from PDFs", page_icon=":page_facing_up:"
     )
     st.write(css, unsafe_allow_html=True)
 
@@ -83,7 +101,7 @@ def main():
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = None
 
-    st.header("Chat with multiple PDFs :books:")
+    st.header("Get answers from PDFs :page_facing_up:")
     user_question = st.text_input("Ask a question about your documents:")
     if user_question:
         handle_userinput(user_question)
